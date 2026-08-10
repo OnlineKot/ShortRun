@@ -2,159 +2,166 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8">
-  <title>Apple Shortcuts Browser Emulator</title>
-  <!-- Biblioteka do parsowania plików Plist / .shortcut -->
-  <script src="https://cdn.jsdelivr.net/npm/plist@3.1.0/dist/plist.min.js"></script>
+  <title>iCloud Shortcut Web Engine</title>
+  <!-- Biblioteki do dekodowania binarnego formatu Apple (bplist) -->
+  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bplist-parser@0.3.2/bplistParser.min.js"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #000; color: #fff; margin: 0; padding: 20px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    #drop-zone { border: 2px dashed #0a84ff; border-radius: 16px; padding: 40px; text-align: center; background: #1c1c1e; cursor: pointer; transition: 0.2s; }
-    #drop-zone:hover { background: #2c2c2e; }
-    .action-card { background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 12px; padding: 14px; margin-top: 10px; }
-    .action-title { font-size: 11px; font-weight: bold; color: #0a84ff; text-transform: uppercase; letter-spacing: 0.5px; }
-    .action-body { margin-top: 5px; font-size: 14px; color: #e5e5ea; }
-    #output-container { background: #000; border: 2px solid #30d158; border-radius: 12px; padding: 16px; margin-top: 20px; }
+    .container { max-width: 700px; margin: 0 auto; }
+    .box { background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+    input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #3a3a3c; background: #2c2c2e; color: #fff; box-sizing: border-box; font-size: 15px; margin-bottom: 10px; }
+    button { background: #0a84ff; border: none; color: #fff; font-weight: bold; padding: 12px 20px; border-radius: 10px; cursor: pointer; width: 100%; font-size: 16px; }
+    button:hover { background: #0071e3; }
+    .badge { display: inline-block; background: #30d158; color: #000; font-weight: bold; font-size: 11px; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; margin-bottom: 8px; }
+    .action-card { background: #2c2c2e; border-left: 3px solid #0a84ff; border-radius: 6px; padding: 10px; margin-top: 8px; font-size: 13px; font-family: monospace; }
     pre { font-family: monospace; color: #30d158; margin: 0; white-space: pre-wrap; word-break: break-all; }
-    button { background: #30d158; border: none; color: #000; font-weight: bold; padding: 12px 24px; border-radius: 10px; cursor: pointer; margin-top: 15px; width: 100%; font-size: 16px; }
-    button:hover { opacity: 0.9; }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h2>⚡ Apple Shortcuts Web Emulator</h2>
+  <h2>⚡ iCloud Shortcut Web Simulator</h2>
   
-  <div id="drop-zone" onclick="document.getElementById('file-input').click()">
-    <p>Upuść tutaj plik <b>.shortcut</b> lub kliknij, aby go załadować</p>
-    <input type="file" id="file-input" accept=".shortcut" style="display: none">
+  <div class="box">
+    <label style="font-size: 13px; color: #8e8e93; display: block; margin-bottom: 8px;">Wklej link iCloud do Skrótu:</label>
+    <input type="text" id="icloudUrl" placeholder="https://www.icloud.com/shortcuts/a1b2c3d4..." value="">
+    
+    <label style="font-size: 13px; color: #8e8e93; display: block; margin-bottom: 8px;">Dane wejściowe (Input dla skrótu):</label>
+    <input type="text" id="userInput" placeholder="Wpisz opcjonalny tekst wejściowy...">
+
+    <button onclick="loadAndRun()">Załaduj i uruchom Skrót</button>
   </div>
 
-  <div id="shortcut-name" style="margin-top: 20px; font-weight: bold; font-size: 18px;"></div>
-  <div id="actions-list"></div>
+  <div class="box" id="outputBox" style="display: none; border-color: #30d158;">
+    <div class="badge">Wyjście (Output)</div>
+    <pre id="outputText">Inicjalizacja...</pre>
+  </div>
 
-  <button id="run-btn" style="display: none;" onclick="executeShortcut()">Uruchom skrót w przeglądarce</button>
-
-  <div id="output-container" style="display: none;">
-    <div class="action-title" style="color: #30d158; margin-bottom: 8px;">WYJŚCIE (OUTPUT)</div>
-    <pre id="output-text"></pre>
+  <div class="box" id="actionsBox" style="display: none;">
+    <div style="font-weight: bold; margin-bottom: 10px;" id="shortcutTitle">Struktura Akcji</div>
+    <div id="actionsList"></div>
   </div>
 </div>
 
 <script>
-  let parsedActions = [];
-  let fileData = null;
+  // Konfiguracja bufora dla przeglądarki
+  const Buffer = window.buffer.Buffer;
 
-  const dropZone = document.getElementById('drop-zone');
-  const fileInput = document.getElementById('file-input');
+  async function loadAndRun() {
+    const rawUrl = document.getElementById('icloudUrl').value.trim();
+    const outputEl = document.getElementById('outputText');
+    const outputBox = document.getElementById('outputBox');
+    const actionsBox = document.getElementById('actionsBox');
 
-  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = '#30d158'; });
-  dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = '#0a84ff'; });
-  dropZone.addEventListener('drop', (e) => {
-    e.preventDefault();
-    dropZone.style.borderColor = '#0a84ff';
-    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
-  });
+    outputBox.style.display = 'block';
+    outputEl.textContent = "Wyciąganie ID ze skrótu...";
 
-  fileInput.addEventListener('change', (e) => {
-    if (e.target.files.length) handleFile(e.target.files[0]);
-  });
+    // 1. Walidacja i wyciągnięcie ID skrótu z adresu URL
+    const match = rawUrl.match(/shortcuts\/([a-f0-9]{32})/i);
+    if (!match) {
+      outputEl.textContent = "Błąd: Wklej poprawny adres URL skrótu iCloud (powinien zawierać 32-znakowy identyfikator).";
+      return;
+    }
 
-  function handleFile(file) {
-    document.getElementById('shortcut-name').textContent = "Wczytano: " + file.name;
-    const reader = new FileReader();
-    
-    reader.onload = function(e) {
-      try {
-        // Parsowanie pliku plist (.shortcut)
-        const parsed = plist.parse(e.target.result);
-        parsedActions = parsed.WFWorkflowActions || [];
-        renderActions(parsedActions);
-        document.getElementById('run-btn').style.display = 'block';
-      } catch (err) {
-        alert("Błąd podczas parsowania pliku .shortcut. Upewnij się, że plik nie jest zaszyfrowany.");
-        console.error(err);
+    const shortcutId = match[1];
+    outputEl.textContent = `Pobieranie binarnego pliku skrótu (ID: ${shortcutId})...`;
+
+    try {
+      // 2. Pobieranie danych skrótu przez CORS Proxy z oficjalnego API Apple
+      const apiUrl = `https://cvws.icloud-content.com/1/shortcut/${shortcutId}`;
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
+      
+      const res = await fetch(proxyUrl);
+      const wrapperData = await res.json();
+      
+      if (!wrapperData.contents) {
+        throw new Error("Nie udało się pobrać odpowiedzi z serwerów Apple.");
       }
-    };
-    
-    // Pliki .shortcut można czytać jako tekstowy XML Plist lub przeminąć binarnie
-    reader.readAsText(file);
+
+      const appleJson = JSON.parse(wrapperData.contents);
+      
+      // Wyciągnięcie nazwy oraz zeskładowanych danych binarnego pliku plist
+      const shortcutName = appleJson.fields?.name?.value || "Bez nazwy";
+      const base64Data = appleJson.fields?.shortcut?.value?.data;
+
+      if (!base64Data) {
+        throw new Error("Skrót nie zawiera danych binarnego pliku .shortcut.");
+      }
+
+      outputEl.textContent = `Odszyfrowywanie struktury bplist skrótu "${shortcutName}"...`;
+
+      // 3. Konwersja danych Base64 do bufora binarnego i dekodowanie bplist
+      const fileBuffer = Buffer.from(base64Data, 'base64');
+      const parsedPlist = bplistParser.parseBuffer(fileBuffer);
+      
+      const shortcutData = parsedPlist[0];
+      const actions = shortcutData.WFWorkflowActions || [];
+
+      document.getElementById('shortcutTitle').textContent = `Skrót: ${shortcutName} (${actions.length} akcji)`;
+      actionsBox.style.display = 'block';
+
+      renderActions(actions);
+      executeShortcut(actions);
+
+    } catch (err) {
+      outputEl.textContent = "Błąd podczas dekodowania: " + err.message;
+      console.error(err);
+    }
   }
 
-  // Wyświetlanie akcji wyciągniętych ze skrótu
   function renderActions(actions) {
-    const list = document.getElementById('actions-list');
+    const list = document.getElementById('actionsList');
     list.innerHTML = '';
-    
+
     actions.forEach((act, i) => {
       const card = document.createElement('div');
       card.className = 'action-card';
-      
-      const type = act.WFWorkflowActionIdentifier.replace('is.workflow.actions.', '');
-      card.innerHTML = `
-        <div class="action-title">Krok ${i + 1}: ${type}</div>
-        <div class="action-body">${JSON.stringify(act.WFWorkflowActionParameters || {})}</div>
-      `;
+      const type = (act.WFWorkflowActionIdentifier || '').replace('is.workflow.actions.', '');
+      card.textContent = `${i + 1}. [${type}]`;
       list.appendChild(card);
     });
   }
 
-  // SILNIK WYKONAWCZY (Interpreter akcji Shortcuts)
-  async function executeShortcut() {
-    const outputContainer = document.getElementById('output-container');
-    const outputText = document.getElementById('output-text');
-    outputContainer.style.display = 'block';
-    outputText.textContent = "Uruchamianie silnika...\n";
+  // 4. Silnik wykonujący wyciągnięte akcje bezpośrednio w przeglądarce
+  async function executeShortcut(actions) {
+    const outputEl = document.getElementById('outputText');
+    let currentVariable = document.getElementById('userInput').value;
 
-    let currentVariable = ""; // Odpowiednik "Shortcut Input / Magic Variable"
+    outputEl.textContent = "== Uruchamianie skrótu na stronie ==\n";
 
-    for (let i = 0; i < parsedActions.length; i++) {
-      const act = parsedActions[i];
-      const id = act.WFWorkflowActionIdentifier;
+    for (let i = 0; i < actions.length; i++) {
+      const act = actions[i];
+      const id = act.WFWorkflowActionIdentifier || '';
       const params = act.WFWorkflowActionParameters || {};
 
-      outputText.textContent += `\n[Wykonuję krok ${i + 1}: ${id}]`;
+      outputEl.textContent += `\n[Krok ${i + 1}: ${id.split('.').pop()}]`;
 
-      // 1. Akcja: Tekst (WFTextAction)
+      // Akcja: Tekst
       if (id.includes('text')) {
-        currentVariable = params.WFTextActionText || "";
-        outputText.textContent += `\n -> Ustawiono tekst: "${currentVariable}"`;
+        currentVariable = params.WFTextActionText || currentVariable;
+        outputEl.textContent += ` -> Zmienna: "${currentVariable}"`;
       }
-      
-      // 2. Akcja: Zapytanie URL / Fetch (URL / DownloadURL)
-      else if (id.includes('downloadurl') || id.includes('http')) {
-        const url = params.WFURL || currentVariable;
-        outputText.textContent += `\n -> Pobieranie z URL: ${url}`;
-        try {
-          let res = await fetch(url);
-          currentVariable = await res.text();
-          outputText.textContent += `\n -> Pobrano danych: ${currentVariable.length} znaków`;
-        } catch(e) {
-          outputText.textContent += `\n -> [CORS/Błąd]: Przeglądarka zablokowała bezpośredni request HTTP.`;
-        }
-      }
-
-      // 3. Akcja: Podział tekstu (WFSplitTextAction)
+      // Akcja: Podział tekstu
       else if (id.includes('splittext')) {
-        const separator = params.WFTextSeparator || " ";
-        currentVariable = currentVariable.split(separator);
-        outputText.textContent += `\n -> Podzielono tekst na tablicę [${currentVariable.join(', ')}]`;
+        const sep = params.WFTextSeparator || " ";
+        currentVariable = currentVariable.split(sep);
+        outputEl.textContent += ` -> Podzielono na tablicę: [${currentVariable.join(', ')}]`;
       }
-
-      // 4. Akcja: Otwórz URL (openurl)
+      // Akcja: Otwórz URL
       else if (id.includes('openurl')) {
         const target = params.WFURL || currentVariable;
-        outputText.textContent += `\n -> Przekierowanie do: ${target}`;
+        outputEl.textContent += ` -> Otwieranie karty: ${target}`;
         window.open(target, '_blank');
       }
-
-      // 5. Inne nieobsługiwane akcje
+      // Inne akcje
       else {
-        outputText.textContent += `\n -> Symulacja akcji (przekazano zmienną dalej)`;
+        outputEl.textContent += ` -> Przetworzono akcję.`;
       }
     }
 
-    outputText.textContent += `\n\n=== KOŃCOWE WYJŚCIE (OUTPUT) ===\n`;
-    outputText.textContent += typeof currentVariable === 'object' ? JSON.stringify(currentVariable, null, 2) : currentVariable;
+    outputEl.textContent += `\n\n=== KOŃCOWE WYJŚCIE (OUTPUT) ===\n`;
+    outputEl.textContent += typeof currentVariable === 'object' ? JSON.stringify(currentVariable, null, 2) : currentVariable;
   }
 </script>
 
