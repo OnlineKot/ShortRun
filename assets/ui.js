@@ -10,7 +10,7 @@
   var state = {
     shortcut: null,
     running: false,
-    settings: { proxy: "", proxyForRequests: false }
+    settings: { proxy: "", proxyForRequests: false, publicProxies: true }
   };
 
   /* ---------- ustawienia ---------- */
@@ -20,11 +20,16 @@
     if (saved && typeof saved === "object") {
       state.settings.proxy = typeof saved.proxy === "string" ? saved.proxy : "";
       state.settings.proxyForRequests = !!saved.proxyForRequests;
+      state.settings.publicProxies = saved.publicProxies !== false;
     }
   } catch (e) { /* brak lub uszkodzone ustawienia — zostają domyślne */ }
 
   function saveSettings() {
     try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings)); } catch (e) { /* tryb prywatny */ }
+  }
+
+  function fetchOptions() {
+    return { proxy: state.settings.proxy, publicProxies: state.settings.publicProxies };
   }
 
   /* ---------- komunikaty ---------- */
@@ -406,28 +411,49 @@
     banner("info", "Wczytuję skrót…");
     return promise.then(function (shortcut) {
       renderShortcut(shortcut);
-      banner("ok", "Wczytano „" + escapeHtml((shortcut.__meta && shortcut.__meta.name) || "skrót") + "”.");
+      var meta = shortcut.__meta || {};
+      banner("ok", "Wczytano „" + escapeHtml(meta.name || "skrót") + "”" +
+        (meta.route ? " (" + escapeHtml(meta.route) + ")" : "") + ".");
       if (andRun) runShortcut();
     }, function (err) {
       var message = err && err.message ? err.message : String(err);
       if (err && err.code === "AEA") {
-        message += " Wyeksportuj skrót do pliku na Macu (Plik → Eksportuj) albo wklej definicję ręcznie.";
-      } else if (/Failed to fetch|NetworkError|Load failed/i.test(message)) {
-        message = "Nie udało się pobrać skrótu z iCloud — najpewniej blokada CORS. " +
-                  "Ustaw proxy w Ustawieniach albo wczytaj plik skrótu z dysku.";
+        banner("err", escapeHtml(message) +
+          " Wyeksportuj skrót do pliku na Macu (Plik → Eksportuj) albo wklej definicję ręcznie.");
+      } else if (err && err.code === "FETCH") {
+        renderRoutes((err.attempts || []).map(function (line) {
+          var at = line.indexOf(":");
+          return { name: line.slice(0, at), ok: false, detail: line.slice(at + 1).trim() };
+        }));
+        banner("err", "Żadna droga do iCloud nie zadziałała. Szczegóły są pod przyciskami. " +
+          (state.settings.publicProxies
+            ? "Publiczne proxy też odmówiły, więc zostaje wczytanie pliku skrótu z dysku."
+            : "Włącz publiczne proxy w Ustawieniach albo wczytaj plik skrótu z dysku."));
+      } else {
+        banner("err", escapeHtml(message));
       }
-      banner("err", escapeHtml(message));
     });
+  }
+
+  function renderRoutes(reports) {
+    if (!reports || !reports.length) { $("routes").innerHTML = ""; return; }
+    $("routes").className = "routes";
+    $("routes").innerHTML = reports.map(function (report) {
+      return '<div class="route ' + (report.ok ? "ok" : "bad") + '">' +
+        '<span class="mark">' + (report.ok ? "✓" : "✕") + "</span>" +
+        '<span class="who">' + escapeHtml(report.name) + "</span>" +
+        '<span class="why">' + escapeHtml(report.detail) + "</span></div>";
+    }).join("");
   }
 
   /* ---------- zdarzenia ---------- */
 
   $("loadRun").addEventListener("click", function () {
-    loadFrom(SR.loader.fromICloud($("link").value, { proxy: state.settings.proxy }), true);
+    loadFrom(SR.loader.fromICloud($("link").value, fetchOptions()), true);
   });
 
   $("loadOnly").addEventListener("click", function () {
-    loadFrom(SR.loader.fromICloud($("link").value, { proxy: state.settings.proxy }), false);
+    loadFrom(SR.loader.fromICloud($("link").value, fetchOptions()), false);
   });
 
   $("runAgain").addEventListener("click", runShortcut);
@@ -455,14 +481,30 @@
     $("pasteCancel").onclick = function () { closeDialog(dialog); };
   });
 
+  $("diagnose").addEventListener("click", function () {
+    banner("info", "Sprawdzam po kolei wszystkie drogi do iCloud…");
+    $("diagnose").disabled = true;
+    SR.loader.diagnose($("link").value, fetchOptions()).then(function (reports) {
+      renderRoutes(reports);
+      var working = reports.filter(function (r) { return r.ok; });
+      banner(working.length ? "ok" : "err", working.length
+        ? "Działa: " + working.map(function (r) { return escapeHtml(r.name); }).join(", ") + "."
+        : "Żadna droga nie zadziałała. Wczytaj plik skrótu z dysku albo wklej definicję.");
+    }, function (err) {
+      banner("err", escapeHtml(err.message));
+    }).then(function () { $("diagnose").disabled = false; });
+  });
+
   $("settings").addEventListener("click", function () {
     var dialog = $("settingsDialog");
     $("proxy").value = state.settings.proxy;
     $("proxyForRequests").checked = state.settings.proxyForRequests;
+    $("publicProxies").checked = state.settings.publicProxies;
     openDialog(dialog);
     $("settingsSave").onclick = function () {
       state.settings.proxy = $("proxy").value.trim();
       state.settings.proxyForRequests = $("proxyForRequests").checked;
+      state.settings.publicProxies = $("publicProxies").checked;
       saveSettings();
       closeDialog(dialog);
       banner("ok", "Ustawienia zapisane.");
@@ -517,7 +559,7 @@
     if (q.get("failed")) banner("err", "Skrót „" + escapeHtml(q.get("failed")) + "” nie zadziałał na urządzeniu.");
     if (link) {
       $("link").value = link;
-      loadFrom(SR.loader.fromICloud(link, { proxy: state.settings.proxy }), q.get("run") !== "0");
+      loadFrom(SR.loader.fromICloud(link, fetchOptions()), q.get("run") !== "0");
     }
   })();
 })(window.ShortRun);

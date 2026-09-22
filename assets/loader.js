@@ -4,6 +4,16 @@
 
   var ICLOUD_API = "https://www.icloud.com/shortcuts/api/records/";
 
+  /* iCloud nie wysyła nagłówków CORS, więc bezpośrednie pobranie z obcej domeny
+     kończy się błędem sieci. Dlatego po nieudanej próbie wprost idziemy przez
+     publiczne proxy. {url} to adres zakodowany, {raw} adres dosłowny. */
+  var PUBLIC_PROXIES = [
+    { name: "allorigins", template: "https://api.allorigins.win/raw?url={url}" },
+    { name: "corsproxy.io", template: "https://corsproxy.io/?url={url}" },
+    { name: "isomorphic-git", template: "https://cors.isomorphic-git.org/{raw}" },
+    { name: "codetabs", template: "https://api.codetabs.com/v1/proxy/?quest={url}" }
+  ];
+
   function idFromLink(link) {
     var text = String(link || "").trim();
     var m = /icloud\.com\/shortcuts\/(?:api\/records\/)?([0-9a-fA-F]{20,40})/.exec(text);
@@ -12,31 +22,97 @@
     return null;
   }
 
-  // Proxy jest opcjonalne: iCloud nie zawsze odpowiada z nagłówkami CORS.
-  // Szablon użytkownika musi zawierać {url}; wstawiamy adres zakodowany.
-  function viaProxy(url, template) {
-    if (!template) return url;
-    return template.indexOf("{url}") !== -1
-      ? template.replace("{url}", encodeURIComponent(url))
-      : template + encodeURIComponent(url);
+  function applyTemplate(template, url) {
+    if (template.indexOf("{url}") !== -1) return template.replace("{url}", encodeURIComponent(url));
+    if (template.indexOf("{raw}") !== -1) return template.replace("{raw}", url.replace(/^https?:\/\//, ""));
+    return template + encodeURIComponent(url);
   }
 
-  function fetchBuffer(url, proxy) {
-    return fetch(url, { credentials: "omit" }).then(function (res) {
-      if (!res.ok) throw new Error("HTTP " + res.status + " przy " + url);
-      return res.arrayBuffer();
-    }).catch(function (err) {
-      if (!proxy) throw err;
-      return fetch(viaProxy(url, proxy), { credentials: "omit" }).then(function (res) {
-        if (!res.ok) throw new Error("HTTP " + res.status + " (proxy)");
-        return res.arrayBuffer();
+  /* Kolejność prób: wprost, proxy użytkownika, potem publiczne.
+     Trasa, która zadziałała wcześniej w tym samym wczytywaniu, idzie na początek. */
+  function routesFor(url, options) {
+    var routes = [{ name: "bezpośrednio", url: url }];
+    if (options.proxy) routes.push({ name: "własne proxy", url: applyTemplate(options.proxy, url) });
+    if (options.publicProxies !== false) {
+      PUBLIC_PROXIES.forEach(function (proxy) {
+        routes.push({ name: proxy.name, url: applyTemplate(proxy.template, url) });
       });
+    }
+    if (!options.prefer) return routes;
+    var preferred = routes.filter(function (route) { return route.name === options.prefer; });
+    return preferred.concat(routes.filter(function (route) { return route.name !== options.prefer; }));
+  }
+
+  function fetchBuffer(url, options) {
+    options = options || {};
+    var routes = routesFor(url, options);
+    var failures = [];
+
+    return routes.reduce(function (chain, route) {
+      return chain.catch(function () {
+        return fetch(route.url, { credentials: "omit" }).then(function (res) {
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return res.arrayBuffer();
+        }).then(function (buf) {
+          if (!buf || buf.byteLength === 0) throw new Error("pusta odpowiedź");
+          if (options.onRoute) options.onRoute(route.name);
+          return buf;
+        }).catch(function (err) {
+          failures.push(route.name + ": " + describeFailure(err));
+          throw err;
+        });
+      });
+    }, Promise.reject(new Error("start"))).catch(function () {
+      var error = new Error("Nie udało się pobrać danych z " + hostOf(url) + ".\n" + failures.join("\n"));
+      error.code = "FETCH";
+      error.attempts = failures;
+      throw error;
     });
   }
 
-  function fetchJson(url, proxy) {
-    return fetchBuffer(url, proxy).then(function (buf) {
-      return JSON.parse(new TextDecoder("utf-8").decode(new Uint8Array(buf)));
+  function describeFailure(err) {
+    var message = err && err.message ? err.message : String(err);
+    if (/Failed to fetch|NetworkError|Load failed|CORS/i.test(message)) return "zablokowane przez CORS";
+    return message;
+  }
+
+  function hostOf(url) {
+    try { return new URL(url).hostname; } catch (e) { return url; }
+  }
+
+  function fetchJson(url, options) {
+    return fetchBuffer(url, options).then(function (buf) {
+      var text = new TextDecoder("utf-8").decode(new Uint8Array(buf));
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new Error("Odpowiedź nie jest JSON-em (pierwsze znaki: " + text.slice(0, 40) + ").");
+      }
+    });
+  }
+
+  /* Sprawdza po kolei wszystkie trasy i zwraca raport, nie przerywając na pierwszym błędzie. */
+  function diagnose(link, options) {
+    options = options || {};
+    var id = idFromLink(link);
+    if (!id) return Promise.reject(new Error("Najpierw wklej poprawny link iCloud."));
+    var url = ICLOUD_API + id;
+
+    return root.val.mapSeries(routesFor(url, options), function (route) {
+      var started = Date.now();
+      return fetch(route.url, { credentials: "omit" }).then(function (res) {
+        return res.text().then(function (text) {
+          var ok = res.ok && text.indexOf("\"fields\"") !== -1;
+          return {
+            name: route.name,
+            ok: ok,
+            detail: ok ? "rekord pobrany w " + (Date.now() - started) + " ms"
+                       : "HTTP " + res.status + ", " + text.slice(0, 60)
+          };
+        });
+      }, function (err) {
+        return { name: route.name, ok: false, detail: describeFailure(err) };
+      });
     });
   }
 
@@ -46,10 +122,18 @@
     if (!id) {
       return Promise.reject(new Error("To nie wygląda na link iCloud do skrótu (oczekiwano icloud.com/shortcuts/…)."));
     }
-    var proxy = options.proxy || "";
     var meta = null;
+    var routeUsed = null;
+    var fetchOptions = {
+      proxy: options.proxy || "",
+      publicProxies: options.publicProxies !== false,
+      onRoute: function (name) {
+        if (!routeUsed) routeUsed = name;
+        fetchOptions.prefer = name;
+      }
+    };
 
-    return fetchJson(ICLOUD_API + id, proxy).then(function (record) {
+    return fetchJson(ICLOUD_API + id, fetchOptions).then(function (record) {
       // Nieistniejący lub cofnięty skrót: API odpowiada zwykłym JSON-em z błędem.
       if (!record || record.error) {
         throw new Error("iCloud nie zna tego skrótu (" + ((record && record.reason) || "brak rekordu") +
@@ -74,8 +158,9 @@
         .filter(Boolean);
 
       if (!assets.length) throw new Error("Rekord iCloud nie zawiera pliku skrótu.");
-      return tryAssets(assets, proxy);
+      return tryAssets(assets, fetchOptions);
     }).then(function (shortcut) {
+      meta.route = routeUsed;
       shortcut.__meta = meta;
       return shortcut;
     });
@@ -87,10 +172,10 @@
     return url ? url.replace("${f}", "shortcut.plist") : null;
   }
 
-  function tryAssets(urls, proxy) {
+  function tryAssets(urls, fetchOptions) {
     return urls.reduce(function (chain, url) {
       return chain.catch(function (previous) {
-        return fetchBuffer(url, proxy)
+        return fetchBuffer(url, fetchOptions)
           .then(function (buf) { return extract(root.plist.parse(buf)); })
           .catch(function (err) { throw previous && previous.code === "AEA" ? previous : err; });
       });
@@ -151,6 +236,8 @@
 
   root.loader = {
     fromICloud: fromICloud,
+    diagnose: diagnose,
+    proxies: PUBLIC_PROXIES,
     fromFile: fromFile,
     fromText: fromText,
     idFromLink: idFromLink,

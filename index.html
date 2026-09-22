@@ -39,9 +39,11 @@
     <div class="row">
       <button id="pickFile" class="secondary">📄 Plik .shortcut</button>
       <button id="pastePlist" class="secondary">⌨︎ Wklej definicję</button>
+      <button id="diagnose" class="secondary">🩺 Diagnostyka</button>
       <button id="settings" class="secondary">⚙︎ Ustawienia</button>
     </div>
     <input id="file" type="file" accept=".shortcut,.plist,.json,application/json" hidden>
+    <div id="routes"></div>
   </div>
 
   <div class="card" id="infoCard" hidden>
@@ -146,9 +148,13 @@
 
 <dialog id="settingsDialog">
   <h3>Ustawienia</h3>
-  <label for="proxy">Proxy CORS (opcjonalne)</label>
+  <label style="display:flex; align-items:center; gap:10px; color:var(--text); font-size:15px; margin-bottom:6px">
+    <input type="checkbox" id="publicProxies" style="width:auto"> Używaj publicznych proxy, gdy iCloud zablokuje zapytanie
+  </label>
+  <p class="msg">iCloud nie wysyła nagłówków CORS, więc bez tego link z iCloud nie wczyta się w ogóle. Do proxy trafia wtedy publiczny adres udostępnionego skrótu, nic poza tym. Bez zaznaczenia zostaje wczytanie pliku z dysku.</p>
+  <label for="proxy">Własne proxy (pierwszeństwo przed publicznymi)</label>
   <input id="proxy" type="text" placeholder="https://moje-proxy.example/?url={url}" autocomplete="off" spellcheck="false">
-  <p class="msg">Używane dopiero wtedy, gdy bezpośrednie pobranie nie przejdzie przez CORS. Adres skrótu trafia wówczas do podanego serwera — wpisuj tylko proxy, któremu ufasz.</p>
+  <p class="msg">Szablon z <code>{url}</code> dla adresu zakodowanego albo <code>{raw}</code> dla dosłownego.</p>
   <label style="display:flex; align-items:center; gap:10px; color:var(--text); font-size:15px">
     <input type="checkbox" id="proxyForRequests" style="width:auto"> Używaj proxy także dla zapytań HTTP wykonywanych przez skrót
   </label>

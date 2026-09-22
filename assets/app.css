@@ -129,3 +129,12 @@ details summary { cursor: pointer; color: var(--blue); font-size: 14px; }
 details .body { font-size: 13.5px; color: var(--muted); }
 details .body li { margin-bottom: 6px; }
 footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 26px; }
+
+.routes { margin-top: 14px; }
+.route { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.route:last-child { border-bottom: none; }
+.route .mark { width: 16px; flex: none; }
+.route .who { font-weight: 600; min-width: 108px; }
+.route .why { color: var(--muted); word-break: break-word; }
+.route.ok .mark { color: var(--green); }
+.route.bad .mark { color: var(--red); }
