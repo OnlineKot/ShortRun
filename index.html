@@ -96,7 +96,7 @@
           <li><strong>Wykonywane naprawdę:</strong> tekst, liczby, wyrażenia, słowniki i listy, JSON, zapytania HTTP, schowek, pytania i menu, powiadomienia, mowa, lokalizacja, bateria, daty.</li>
           <li><strong>Emulowane:</strong> Zdrowie, Dom, wiadomości i poczta, kalendarz, przypomnienia, notatki, zdjęcia i aparat, pliki, muzyka, Wi-Fi, Bluetooth, jasność, głośność, tryby skupienia, pogoda, mapy, kontakty. Wirtualne urządzenie zmienia stan, zwraca wiarygodne dane i pokazuje to w panelu. Nieznana akcja też jest emulowana, a nie pomijana.</li>
           <li><strong>Podpisane skróty (AEA):</strong> rekord iCloud zawiera dwa pliki, zwykły plist i wersję podpisaną. ShortRun bierze najpierw ten zwykły, a gdy trafi na archiwum AEA, próbuje drugiego pliku i dopiero potem mówi wprost, że przeglądarka go nie rozpakuje.</li>
-          <li><strong>CORS:</strong> iCloud i część API nie zezwalają na zapytania z innych domen. W Ustawieniach można podać własne proxy z szablonem <code>{url}</code>.</li>
+          <li><strong>CORS:</strong> iCloud nie wysyła nagłówka <code>Access-Control-Allow-Origin</code>, więc pobranie wprost nie przejdzie. ShortRun idzie wtedy przez proxy: najpierw Twoje własne, potem publiczne. Przycisk Diagnostyka pokazuje, która droga odpowiada. Własny worker z katalogu <code>proxy/</code> jest jedyną drogą, która nie zależy od cudzego serwera.</li>
         </ul>
       </div>
     </details>
@@ -153,8 +153,8 @@
   </label>
   <p class="msg">iCloud nie wysyła nagłówków CORS, więc bez tego link z iCloud nie wczyta się w ogóle. Do proxy trafia wtedy publiczny adres udostępnionego skrótu, nic poza tym. Bez zaznaczenia zostaje wczytanie pliku z dysku.</p>
   <label for="proxy">Własne proxy (pierwszeństwo przed publicznymi)</label>
-  <input id="proxy" type="text" placeholder="https://moje-proxy.example/?url={url}" autocomplete="off" spellcheck="false">
-  <p class="msg">Szablon z <code>{url}</code> dla adresu zakodowanego albo <code>{raw}</code> dla dosłownego.</p>
+  <input id="proxy" type="text" placeholder="https://shortrun-proxy.twoj-login.workers.dev/?url={url}" autocomplete="off" spellcheck="false">
+  <p class="msg">Szablon z <code>{url}</code> dla adresu zakodowanego albo <code>{raw}</code> dla dosłownego. Publiczne proxy bywają wyłączone albo żądają klucza, więc najpewniejszy jest własny worker: gotowy kod i instrukcja leżą w katalogu <code>proxy/</code> tego repozytorium.</p>
   <label style="display:flex; align-items:center; gap:10px; color:var(--text); font-size:15px">
     <input type="checkbox" id="proxyForRequests" style="width:auto"> Używaj proxy także dla zapytań HTTP wykonywanych przez skrót
   </label>

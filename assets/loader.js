@@ -7,12 +7,34 @@
   /* iCloud nie wysyła nagłówków CORS, więc bezpośrednie pobranie z obcej domeny
      kończy się błędem sieci. Dlatego po nieudanej próbie wprost idziemy przez
      publiczne proxy. {url} to adres zakodowany, {raw} adres dosłowny. */
+  /* Lista sprawdzona prawdziwym ruchem 22.09.2026. Odpadły: corsproxy.io (wymaga
+     klucza API), cors.isomorphic-git.org (blokada WAF), api.cors.lol (limit zapytań).
+     Zostały te, które odpowiadają, ale i one bywają wyłączone, więc pewną drogą
+     jest własny worker z katalogu proxy/. */
   var PUBLIC_PROXIES = [
     { name: "allorigins", template: "https://api.allorigins.win/raw?url={url}" },
-    { name: "corsproxy.io", template: "https://corsproxy.io/?url={url}" },
-    { name: "isomorphic-git", template: "https://cors.isomorphic-git.org/{raw}" },
-    { name: "codetabs", template: "https://api.codetabs.com/v1/proxy/?quest={url}" }
+    { name: "codetabs", template: "https://api.codetabs.com/v1/proxy/?quest={url}" },
+    { name: "corsfix", template: "https://proxy.corsfix.com/?{raw}" }
   ];
+
+  /* Proxy potrafi odpowiedzieć kodem 200 i własnym błędem w treści.
+     Takie odpowiedzi traktujemy jak porażkę trasy, nie jak plik skrótu. */
+  var PROXY_ERRORS = [
+    { marker: /valid API key is required/i, reason: "wymaga klucza API" },
+    { marker: /corsfix_error|invalid_origin/i, reason: "odrzucone przez corsfix" },
+    { marker: /Rate limit exceeded/i, reason: "przekroczony limit zapytań" },
+    { marker: /Connection timed out|error code:? ?52\d/i, reason: "serwer proxy nie odpowiada" },
+    { marker: /you have been blocked|Attention Required/i, reason: "zablokowane przez zabezpieczenia proxy" },
+    { marker: /Just a moment\.\.\./i, reason: "proxy żąda przejścia testu Cloudflare" }
+  ];
+
+  function proxyErrorIn(buf) {
+    var head = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(buf, 0, Math.min(1200, buf.byteLength)));
+    for (var i = 0; i < PROXY_ERRORS.length; i++) {
+      if (PROXY_ERRORS[i].marker.test(head)) return PROXY_ERRORS[i].reason;
+    }
+    return null;
+  }
 
   function idFromLink(link) {
     var text = String(link || "").trim();
@@ -55,6 +77,8 @@
           return res.arrayBuffer();
         }).then(function (buf) {
           if (!buf || buf.byteLength === 0) throw new Error("pusta odpowiedź");
+          var proxyError = proxyErrorIn(buf);
+          if (proxyError) throw new Error(proxyError);
           if (options.onRoute) options.onRoute(route.name);
           return buf;
         }).catch(function (err) {
@@ -103,11 +127,15 @@
       return fetch(route.url, { credentials: "omit" }).then(function (res) {
         return res.text().then(function (text) {
           var ok = res.ok && text.indexOf("\"fields\"") !== -1;
+          var known = null;
+          for (var i = 0; i < PROXY_ERRORS.length && !known; i++) {
+            if (PROXY_ERRORS[i].marker.test(text)) known = PROXY_ERRORS[i].reason;
+          }
           return {
             name: route.name,
             ok: ok,
             detail: ok ? "rekord pobrany w " + (Date.now() - started) + " ms"
-                       : "HTTP " + res.status + ", " + text.slice(0, 60)
+                       : (known || "HTTP " + res.status + ", " + text.slice(0, 60).replace(/\s+/g, " "))
           };
         });
       }, function (err) {
