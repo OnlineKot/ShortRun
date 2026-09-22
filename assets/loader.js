@@ -28,11 +28,18 @@
     { marker: /Just a moment\.\.\./i, reason: "proxy żąda przejścia testu Cloudflare" }
   ];
 
+  /* Ani rekord, ani plik skrótu nie są HTML-em. Strona HTML w odpowiedzi zawsze
+     oznacza pomyłkę: brak endpointu, przekierowanie hostingu albo komunikat proxy. */
+  function looksLikeHtml(head) {
+    return /^\s*(<!doctype html|<html[\s>])/i.test(head);
+  }
+
   function proxyErrorIn(buf) {
     var head = new TextDecoder("utf-8", { fatal: false }).decode(new Uint8Array(buf, 0, Math.min(1200, buf.byteLength)));
     for (var i = 0; i < PROXY_ERRORS.length; i++) {
       if (PROXY_ERRORS[i].marker.test(head)) return PROXY_ERRORS[i].reason;
     }
+    if (looksLikeHtml(head)) return "odpowiedź to strona HTML, nie dane skrótu";
     return null;
   }
 
@@ -42,6 +49,14 @@
     if (m) return m[1];
     if (/^[0-9a-fA-F]{20,40}$/.test(text)) return text;
     return null;
+  }
+
+  /* Gdy strona stoi na Cloudflare Pages, funkcja z functions/proxy.js daje jej
+     własne proxy na tej samej domenie. Na innym hostingu trasa zwróci 404
+     i łańcuch po prostu idzie dalej. */
+  function sameOriginProxy(url) {
+    if (typeof location === "undefined" || !/^https?:$/.test(location.protocol)) return null;
+    return location.origin + "/proxy?url=" + encodeURIComponent(url);
   }
 
   function applyTemplate(template, url) {
@@ -54,6 +69,8 @@
      Trasa, która zadziałała wcześniej w tym samym wczytywaniu, idzie na początek. */
   function routesFor(url, options) {
     var routes = [{ name: "bezpośrednio", url: url }];
+    var own = sameOriginProxy(url);
+    if (own) routes.push({ name: "proxy tej strony", url: own });
     if (options.proxy) routes.push({ name: "własne proxy", url: applyTemplate(options.proxy, url) });
     if (options.publicProxies !== false) {
       PUBLIC_PROXIES.forEach(function (proxy) {
@@ -130,6 +147,11 @@
           var known = null;
           for (var i = 0; i < PROXY_ERRORS.length && !known; i++) {
             if (PROXY_ERRORS[i].marker.test(text)) known = PROXY_ERRORS[i].reason;
+          }
+          if (!known && looksLikeHtml(text)) {
+            known = route.name === "proxy tej strony"
+              ? "ten hosting nie ma endpointu /proxy"
+              : "odpowiedź to strona HTML, nie rekord";
           }
           return {
             name: route.name,

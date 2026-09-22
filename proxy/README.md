@@ -13,7 +13,16 @@ ale te bywają zawodne. Sprawdzone 22 września 2026 z sieci centrum danych:
 | `api.cors.lol` | przekroczony limit zapytań |
 | `proxy.corsfix.com` | działa tylko z nagłówkiem `Origin`, czyli z `fetch()` w przeglądarce |
 
-Dlatego najpewniejsza droga to własny worker. Plan darmowy Cloudflare w zupełności wystarcza.
+Dlatego najpewniejsza droga to własne proxy. Są dwie, obie na darmowym planie Cloudflare.
+
+## Najprościej: Cloudflare Pages
+
+Jeśli publikujesz ShortRun na Cloudflare Pages, nie musisz robić nic. Plik
+[`functions/proxy.js`](../functions/proxy.js) z tego repozytorium wdraża się razem ze stroną
+jako endpoint `/proxy?url=…` na tej samej domenie, a ShortRun sprawdza tę trasę zaraz po
+próbie bezpośredniej. Na innym hostingu trasa zwraca 404 i łańcuch idzie dalej.
+
+## Osobny worker (gdy hostujesz gdzie indziej)
 
 ## Wdrożenie
 

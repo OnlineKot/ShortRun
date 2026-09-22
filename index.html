@@ -11,7 +11,7 @@
 <title>ShortRun · TeodorTeo.com</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%235e5ce6'/%3E%3Ctext x='50' y='70' font-size='58' text-anchor='middle'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
 <meta http-equiv="cache-control" content="no-cache">
-<link rel="stylesheet" href="assets/app.css?v=2026-09-22.6">
+<link rel="stylesheet" href="assets/app.css?v=2026-09-22.7">
 </head>
 <body>
 <div class="wrap">
@@ -97,7 +97,7 @@
           <li><strong>Wykonywane naprawdę:</strong> tekst, liczby, wyrażenia, słowniki i listy, JSON, zapytania HTTP, schowek, pytania i menu, powiadomienia, mowa, lokalizacja, bateria, daty.</li>
           <li><strong>Emulowane:</strong> Zdrowie, Dom, wiadomości i poczta, kalendarz, przypomnienia, notatki, zdjęcia i aparat, pliki, muzyka, Wi-Fi, Bluetooth, jasność, głośność, tryby skupienia, pogoda, mapy, kontakty. Wirtualne urządzenie zmienia stan, zwraca wiarygodne dane i pokazuje to w panelu. Nieznana akcja też jest emulowana, a nie pomijana.</li>
           <li><strong>Podpisane skróty (AEA):</strong> rekord iCloud zawiera dwa pliki, zwykły plist i wersję podpisaną. ShortRun bierze najpierw ten zwykły, a gdy trafi na archiwum AEA, próbuje drugiego pliku i dopiero potem mówi wprost, że przeglądarka go nie rozpakuje.</li>
-          <li><strong>CORS:</strong> iCloud nie wysyła nagłówka <code>Access-Control-Allow-Origin</code>, więc pobranie wprost nie przejdzie. ShortRun idzie wtedy przez proxy: najpierw Twoje własne, potem publiczne. Przycisk Diagnostyka pokazuje, która droga odpowiada. Własny worker z katalogu <code>proxy/</code> jest jedyną drogą, która nie zależy od cudzego serwera.</li>
+          <li><strong>CORS:</strong> iCloud nie wysyła nagłówka <code>Access-Control-Allow-Origin</code>, więc pobranie wprost nie przejdzie. ShortRun idzie wtedy przez proxy: najpierw <code>/proxy</code> na tej samej domenie (działa, gdy strona stoi na Cloudflare Pages), potem Twoje własne z Ustawień, na końcu publiczne. Przycisk Diagnostyka pokazuje, która droga odpowiada. Własny worker z katalogu <code>proxy/</code> jest jedyną drogą, która nie zależy od cudzego serwera.</li>
         </ul>
       </div>
     </details>
@@ -106,7 +106,7 @@
   <footer>
     Wszystko dzieje się lokalnie w Twojej przeglądarce. Poza zapytaniami, które wykonuje sam skrót, nic nie opuszcza tego urządzenia.<br>
     <a href="https://TeodorTeo.com" target="_blank" rel="noopener">TeodorTeo.com</a>
-    · <span id="build">build 2026-09-22.6</span>
+    · <span id="build">build 2026-09-22.7</span>
   </footer>
 </div>
 
@@ -166,11 +166,11 @@
   </div>
 </dialog>
 
-<script src="assets/plist.js?v=2026-09-22.6"></script>
-<script src="assets/engine.js?v=2026-09-22.6"></script>
-<script src="assets/actions.js?v=2026-09-22.6"></script>
-<script src="assets/emulation.js?v=2026-09-22.6"></script>
-<script src="assets/loader.js?v=2026-09-22.6"></script>
-<script src="assets/ui.js?v=2026-09-22.6"></script>
+<script src="assets/plist.js?v=2026-09-22.7"></script>
+<script src="assets/engine.js?v=2026-09-22.7"></script>
+<script src="assets/actions.js?v=2026-09-22.7"></script>
+<script src="assets/emulation.js?v=2026-09-22.7"></script>
+<script src="assets/loader.js?v=2026-09-22.7"></script>
+<script src="assets/ui.js?v=2026-09-22.7"></script>
 </body>
 </html>
