@@ -79,11 +79,11 @@
     <details open>
       <summary>Co symulator potrafi, a czego nie</summary>
       <div class="body">
-        <p>Plik skrótu to lista akcji zapisana w plist. ShortRun pobiera go z iCloud, parsuje binarny plist w przeglądarce i wykonuje akcje własnym interpreterem — ze zmiennymi, zmiennymi magicznymi, warunkami, pętlami i menu.</p>
+        <p>Plik skrótu to lista akcji zapisana w plist. ShortRun czyta rekord <code>icloud.com/shortcuts/api/records/&lt;id&gt;</code>, pobiera z niego plik skrótu, parsuje binarny plist w przeglądarce i wykonuje akcje własnym interpreterem: ze zmiennymi, zmiennymi magicznymi, warunkami, pętlami i menu.</p>
         <ul>
           <li><strong>Działa:</strong> tekst, liczby, wyrażenia, słowniki i listy, JSON, zapytania HTTP, schowek, pytania i menu, powiadomienia, mowa, lokalizacja, bateria, daty.</li>
           <li><strong>Nie zadziała:</strong> akcje sięgające do systemu Apple — Zdrowie, Dom, Zdjęcia, pliki iCloud, ustawienia urządzenia, automatyzacje. Takie kroki są pomijane i oznaczane w przebiegu.</li>
-          <li><strong>Podpisane skróty (AEA):</strong> pliki pobrane z iCloud bywają zaszyfrowanym archiwum Apple — wtedy w przeglądarce nie da się ich rozpakować i ShortRun powie to wprost.</li>
+          <li><strong>Podpisane skróty (AEA):</strong> rekord iCloud zawiera dwa pliki, zwykły plist i wersję podpisaną. ShortRun bierze najpierw ten zwykły, a gdy trafi na archiwum AEA, próbuje drugiego pliku i dopiero potem mówi wprost, że przeglądarka go nie rozpakuje.</li>
           <li><strong>CORS:</strong> iCloud i część API nie zezwalają na zapytania z innych domen. W Ustawieniach można podać własne proxy z szablonem <code>{url}</code>.</li>
         </ul>
       </div>

@@ -48,23 +48,53 @@
     }
     var proxy = options.proxy || "";
     var meta = null;
+
     return fetchJson(ICLOUD_API + id, proxy).then(function (record) {
-      var fields = (record && record.fields) || {};
+      // Nieistniejący lub cofnięty skrót: API odpowiada zwykłym JSON-em z błędem.
+      if (!record || record.error) {
+        throw new Error("iCloud nie zna tego skrótu (" + ((record && record.reason) || "brak rekordu") +
+          "). Link mógł zostać wycofany przez autora.");
+      }
+      if (record.deleted) throw new Error("Autor przestał udostępniać ten skrót.");
+
+      var fields = record.fields || {};
       meta = {
-        name: value(fields.name),
+        name: value(fields.name) || "Skrót",
         id: id,
-        icon: value(fields.icon_color),
+        iconColor: value(fields.icon_color),
+        iconGlyph: value(fields.icon_glyph),
         link: "https://www.icloud.com/shortcuts/" + id
       };
-      var download = value(fields.shortcut) || value(fields.signedShortcut) || {};
-      var url = download.downloadURL || download.url;
-      if (!url) throw new Error("Rekord iCloud nie zawiera pliku skrótu.");
-      return fetchBuffer(url, proxy);
-    }).then(function (buf) {
-      var shortcut = extract(root.plist.parse(buf));
+
+      // Rekord niesie dwa pliki: „shortcut” (zwykły plist) oraz „signedShortcut”
+      // (wersja podpisana, zwykle archiwum AEA). Zaczynamy od tego pierwszego.
+      var assets = [value(fields.shortcut), value(fields.signedShortcut)]
+        .filter(Boolean)
+        .map(function (asset) { return assetUrl(asset); })
+        .filter(Boolean);
+
+      if (!assets.length) throw new Error("Rekord iCloud nie zawiera pliku skrótu.");
+      return tryAssets(assets, proxy);
+    }).then(function (shortcut) {
       shortcut.__meta = meta;
       return shortcut;
     });
+  }
+
+  // CloudKit zwraca adres z placeholderem ${f} w miejscu nazwy pliku.
+  function assetUrl(asset) {
+    var url = asset.downloadURL || asset.url;
+    return url ? url.replace("${f}", "shortcut.plist") : null;
+  }
+
+  function tryAssets(urls, proxy) {
+    return urls.reduce(function (chain, url) {
+      return chain.catch(function (previous) {
+        return fetchBuffer(url, proxy)
+          .then(function (buf) { return extract(root.plist.parse(buf)); })
+          .catch(function (err) { throw previous && previous.code === "AEA" ? previous : err; });
+      });
+    }, Promise.reject(null));
   }
 
   function value(field) {
