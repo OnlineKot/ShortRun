@@ -1,169 +1,616 @@
 <!DOCTYPE html>
 <html lang="pl">
 <head>
-  <meta charset="UTF-8">
-  <title>iCloud Shortcut Web Engine</title>
-  <!-- Biblioteki do dekodowania binarnego formatu Apple (bplist) -->
-  <script src="https://cdn.jsdelivr.net/npm/buffer@6.0.3/index.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bplist-parser@0.3.2/bplistParser.min.js"></script>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #000; color: #fff; margin: 0; padding: 20px; }
-    .container { max-width: 700px; margin: 0 auto; }
-    .box { background: #1c1c1e; border: 1px solid #2c2c2e; border-radius: 14px; padding: 18px; margin-bottom: 14px; }
-    input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #3a3a3c; background: #2c2c2e; color: #fff; box-sizing: border-box; font-size: 15px; margin-bottom: 10px; }
-    button { background: #0a84ff; border: none; color: #fff; font-weight: bold; padding: 12px 20px; border-radius: 10px; cursor: pointer; width: 100%; font-size: 16px; }
-    button:hover { background: #0071e3; }
-    .badge { display: inline-block; background: #30d158; color: #000; font-weight: bold; font-size: 11px; padding: 3px 8px; border-radius: 6px; text-transform: uppercase; margin-bottom: 8px; }
-    .action-card { background: #2c2c2e; border-left: 3px solid #0a84ff; border-radius: 6px; padding: 10px; margin-top: 8px; font-size: 13px; font-family: monospace; }
-    pre { font-family: monospace; color: #30d158; margin: 0; white-space: pre-wrap; word-break: break-all; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<title>ShortRun — uruchamiaj Skróty Apple</title>
+<style>
+  :root {
+    --bg: #000;
+    --card: #1c1c1e;
+    --card-2: #2c2c2e;
+    --line: #38383a;
+    --text: #fff;
+    --muted: #8e8e93;
+    --blue: #0a84ff;
+    --green: #30d158;
+    --red: #ff453a;
+    --orange: #ff9f0a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 20px 16px calc(40px + env(safe-area-inset-bottom));
+    line-height: 1.45;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  header h1 { font-size: 26px; margin: 0; letter-spacing: -0.5px; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 11px; flex: none;
+    background: linear-gradient(135deg, #ff375f, #ff9f0a);
+    display: grid; place-items: center; font-size: 21px;
+  }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; }
+
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 6px; }
+  input, select, textarea {
+    width: 100%; padding: 12px; border-radius: 11px; border: 1px solid var(--line);
+    background: var(--card-2); color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--blue); }
+  textarea { resize: vertical; min-height: 70px; }
+
+  button {
+    border: none; border-radius: 11px; padding: 12px 18px; font-size: 16px;
+    font-weight: 600; cursor: pointer; font-family: inherit; color: #fff; background: var(--blue);
+  }
+  button:active { opacity: 0.75; }
+  button.secondary { background: var(--card-2); border: 1px solid var(--line); }
+  button.ghost { background: transparent; color: var(--blue); padding: 8px 10px; font-size: 14px; }
+  button.danger { background: transparent; color: var(--red); padding: 8px 10px; font-size: 14px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > * { flex: 1 1 140px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .tile {
+    background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 14px;
+    display: flex; flex-direction: column; gap: 8px; min-height: 124px; cursor: pointer;
+    position: relative; overflow: hidden; text-align: left;
+  }
+  .tile::after {
+    content: ""; position: absolute; inset: 0; opacity: 0.16; pointer-events: none;
+    background: radial-gradient(circle at 100% 0%, var(--accent, #0a84ff), transparent 65%);
+  }
+  .tile .icon { font-size: 28px; line-height: 1; }
+  .tile .name { font-weight: 600; font-size: 15px; word-break: break-word; }
+  .tile .meta { font-size: 12px; color: var(--muted); margin-top: auto; word-break: break-word; }
+  .tile .edit {
+    position: absolute; top: 8px; right: 8px; z-index: 2; width: 28px; height: 28px;
+    border-radius: 50%; background: rgba(120,120,128,0.32); display: grid; place-items: center;
+    font-size: 13px; padding: 0;
+  }
+
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 26px 10px; }
+  .banner { border-radius: 12px; padding: 12px 14px; font-size: 13.5px; margin-bottom: 14px; border: 1px solid; }
+  .banner.warn { background: rgba(255,159,10,0.12); border-color: rgba(255,159,10,0.4); color: #ffd79a; }
+  .banner.ok { background: rgba(48,209,88,0.12); border-color: rgba(48,209,88,0.4); color: #a8f0bd; }
+  .banner.err { background: rgba(255,69,58,0.12); border-color: rgba(255,69,58,0.4); color: #ffb3ad; }
+  .banner code { background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 4px; }
+
+  details { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+  details summary { cursor: pointer; color: var(--blue); font-size: 14px; }
+  details .body { font-size: 13.5px; color: var(--muted); }
+  details .body li { margin-bottom: 6px; }
+
+  .link-out { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--green); word-break: break-all; }
+  dialog {
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 18px; padding: 18px; width: min(560px, calc(100vw - 32px));
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.6); }
+  .dialog-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .chip { background: var(--card-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 14px; }
+  .chip.active { border-color: var(--blue); background: rgba(10,132,255,0.2); }
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 24px; }
+</style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="container">
-  <h2>⚡ iCloud Shortcut Web Simulator</h2>
-  
-  <div class="box">
-    <label style="font-size: 13px; color: #8e8e93; display: block; margin-bottom: 8px;">Wklej link iCloud do Skrótu:</label>
-    <input type="text" id="icloudUrl" placeholder="https://www.icloud.com/shortcuts/a1b2c3d4..." value="">
-    
-    <label style="font-size: 13px; color: #8e8e93; display: block; margin-bottom: 8px;">Dane wejściowe (Input dla skrótu):</label>
-    <input type="text" id="userInput" placeholder="Wpisz opcjonalny tekst wejściowy...">
+  <header>
+    <div class="logo">⚡</div>
+    <h1>ShortRun</h1>
+  </header>
+  <p class="sub">Panel startowy do Skrótów Apple. Dodaj skrót raz — uruchamiaj go jednym stuknięciem z przeglądarki.</p>
 
-    <button onclick="loadAndRun()">Załaduj i uruchom Skrót</button>
+  <div id="platformBanner"></div>
+  <div id="statusBanner"></div>
+
+  <div class="card">
+    <h2>Szybkie uruchomienie</h2>
+    <label for="quickName">Nazwa skrótu (dokładnie tak jak w aplikacji Skróty)</label>
+    <input id="quickName" type="text" placeholder="np. Tryb nocny" autocapitalize="sentences" autocomplete="off">
+    <label for="quickInput">Dane wejściowe (opcjonalnie)</label>
+    <input id="quickInput" type="text" placeholder="tekst przekazany do skrótu">
+    <div class="row" style="margin-top:14px">
+      <button id="quickRun">▶︎ Uruchom</button>
+      <button id="quickSave" class="secondary">＋ Zapisz na pulpicie</button>
+    </div>
   </div>
 
-  <div class="box" id="outputBox" style="display: none; border-color: #30d158;">
-    <div class="badge">Wyjście (Output)</div>
-    <pre id="outputText">Inicjalizacja...</pre>
+  <div class="card">
+    <h2>Moje skróty</h2>
+    <div id="tiles" class="grid"></div>
+    <div id="tilesEmpty" class="empty">Brak zapisanych skrótów. Dodaj pierwszy powyżej albo zaimportuj link iCloud.</div>
+    <div class="row" style="margin-top:14px">
+      <button class="secondary" id="addBtn">＋ Nowy kafelek</button>
+      <button class="secondary" id="exportBtn">⇪ Eksport</button>
+      <button class="secondary" id="importBtn">⇩ Import</button>
+    </div>
   </div>
 
-  <div class="box" id="actionsBox" style="display: none;">
-    <div style="font-weight: bold; margin-bottom: 10px;" id="shortcutTitle">Struktura Akcji</div>
-    <div id="actionsList"></div>
+  <div class="card">
+    <h2>Link iCloud</h2>
+    <label for="icloudUrl">Wklej link <code>icloud.com/shortcuts/…</code>, aby dodać skrót do aplikacji Skróty</label>
+    <input id="icloudUrl" type="url" placeholder="https://www.icloud.com/shortcuts/a1b2c3…" autocomplete="off" spellcheck="false">
+    <div class="row" style="margin-top:14px">
+      <button id="icloudInstall">⇩ Dodaj do Skrótów</button>
+      <button id="icloudOpen" class="secondary">Otwórz w Safari</button>
+    </div>
+    <details>
+      <summary>Dlaczego skrót nie wykonuje się „w” przeglądarce?</summary>
+      <div class="body">
+        <p>Skróty Apple to natywne akcje systemowe (pliki, zdrowie, dom, automatyzacje). Przeglądarka ich nie wykonuje i nie istnieje publiczne API, które by na to pozwalało.</p>
+        <p>Ta strona robi jedyną rzecz, która działa naprawdę: przekazuje uruchomienie do aplikacji Skróty przez schemat <code>shortcuts://</code>, czeka na powrót przez <code>x-callback-url</code> i pokazuje wynik. Skrót wykonuje się na Twoim urządzeniu, strona jest pilotem.</p>
+      </div>
+    </details>
   </div>
+
+  <div class="card">
+    <h2>Link do udostępnienia</h2>
+    <p class="sub" style="margin:0 0 10px">Wygeneruj adres, który po otwarciu na iPhonie/Macu od razu uruchomi wybrany skrót — nadaje się na zakładkę, ekran główny lub QR.</p>
+    <select id="shareSelect"></select>
+    <div class="row" style="margin-top:12px">
+      <button class="secondary" id="shareCopy">Kopiuj link</button>
+      <button class="secondary" id="shareOpen">Otwórz</button>
+    </div>
+    <p id="shareOut" class="link-out" style="margin-top:12px"></p>
+  </div>
+
+  <div class="card">
+    <h2>Skróty systemowe</h2>
+    <div class="chip-row">
+      <button class="chip" data-scheme="shortcuts://">Otwórz Skróty</button>
+      <button class="chip" data-scheme="shortcuts://gallery">Galeria</button>
+      <button class="chip" data-scheme="shortcuts://create-shortcut">Nowy skrót</button>
+    </div>
+  </div>
+
+  <footer>Uruchomienia odbywają się lokalnie — nic nie jest wysyłane na serwer. Kafelki są zapisane w pamięci przeglądarki.</footer>
 </div>
 
+<dialog id="editDialog">
+  <h2 style="margin:0 0 4px; font-size:19px">Kafelek skrótu</h2>
+  <form method="dialog" id="editForm">
+    <label for="fName">Nazwa skrótu *</label>
+    <input id="fName" required placeholder="Dokładna nazwa z aplikacji Skróty" autocomplete="off">
+    <label for="fIcon">Ikona (emoji)</label>
+    <input id="fIcon" maxlength="4" placeholder="⚡">
+    <label for="fInput">Domyślne dane wejściowe</label>
+    <textarea id="fInput" placeholder="tekst przekazany jako wejście skrótu"></textarea>
+    <label for="fColor">Kolor</label>
+    <select id="fColor">
+      <option value="#0a84ff">Niebieski</option>
+      <option value="#30d158">Zielony</option>
+      <option value="#ff9f0a">Pomarańczowy</option>
+      <option value="#ff375f">Różowy</option>
+      <option value="#bf5af2">Fioletowy</option>
+      <option value="#64d2ff">Cyjan</option>
+    </select>
+    <label style="display:flex; align-items:center; gap:10px; margin-top:14px; color:var(--text); font-size:15px">
+      <input type="checkbox" id="fAsk" style="width:auto"> Pytaj o dane wejściowe przy każdym uruchomieniu
+    </label>
+    <div class="dialog-actions">
+      <button value="save" id="fSave">Zapisz</button>
+      <button value="cancel" type="button" class="secondary" id="fCancel">Anuluj</button>
+      <button value="delete" type="button" class="danger" id="fDelete">Usuń</button>
+    </div>
+  </form>
+</dialog>
+
 <script>
-  // Konfiguracja bufora dla przeglądarki
-  const Buffer = window.buffer.Buffer;
+(function () {
+  "use strict";
 
-  async function loadAndRun() {
-    const rawUrl = document.getElementById('icloudUrl').value.trim();
-    const outputEl = document.getElementById('outputText');
-    const outputBox = document.getElementById('outputBox');
-    const actionsBox = document.getElementById('actionsBox');
+  var STORE_KEY = "shortrun.shortcuts.v1";
+  var $ = function (id) { return document.getElementById(id); };
 
-    outputBox.style.display = 'block';
-    outputEl.textContent = "Wyciąganie ID ze skrótu...";
+  /* ---------- platforma ---------- */
 
-    // 1. Walidacja i wyciągnięcie ID skrótu z adresu URL
-    const match = rawUrl.match(/shortcuts\/([a-f0-9]{32})/i);
-    if (!match) {
-      outputEl.textContent = "Błąd: Wklej poprawny adres URL skrótu iCloud (powinien zawierać 32-znakowy identyfikator).";
-      return;
-    }
+  var ua = navigator.userAgent;
+  var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+              (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var isMac = /Macintosh|Mac OS X/.test(ua);
+  var isApple = isIOS || isMac;
 
-    const shortcutId = match[1];
-    outputEl.textContent = `Pobieranie binarnego pliku skrótu (ID: ${shortcutId})...`;
+  function banner(el, kind, html) {
+    el.innerHTML = html ? '<div class="banner ' + kind + '">' + html + "</div>" : "";
+  }
 
+  if (!isApple) {
+    banner($("platformBanner"), "warn",
+      "Jesteś na urządzeniu innym niż Apple. Skróty uruchamiają się wyłącznie w iOS, iPadOS i macOS — " +
+      "tutaj możesz przygotować kafelki i wygenerować link, ale samo uruchomienie zadziała dopiero po otwarciu tej strony na iPhonie, iPadzie lub Macu.");
+  }
+
+  /* ---------- dane ---------- */
+
+  var items = [];
+
+  function load() {
     try {
-      // 2. Pobieranie danych skrótu przez CORS Proxy z oficjalnego API Apple
-      const apiUrl = `https://cvws.icloud-content.com/1/shortcut/${shortcutId}`;
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(apiUrl)}`;
-      
-      const res = await fetch(proxyUrl);
-      const wrapperData = await res.json();
-      
-      if (!wrapperData.contents) {
-        throw new Error("Nie udało się pobrać odpowiedzi z serwerów Apple.");
-      }
-
-      const appleJson = JSON.parse(wrapperData.contents);
-      
-      // Wyciągnięcie nazwy oraz zeskładowanych danych binarnego pliku plist
-      const shortcutName = appleJson.fields?.name?.value || "Bez nazwy";
-      const base64Data = appleJson.fields?.shortcut?.value?.data;
-
-      if (!base64Data) {
-        throw new Error("Skrót nie zawiera danych binarnego pliku .shortcut.");
-      }
-
-      outputEl.textContent = `Odszyfrowywanie struktury bplist skrótu "${shortcutName}"...`;
-
-      // 3. Konwersja danych Base64 do bufora binarnego i dekodowanie bplist
-      const fileBuffer = Buffer.from(base64Data, 'base64');
-      const parsedPlist = bplistParser.parseBuffer(fileBuffer);
-      
-      const shortcutData = parsedPlist[0];
-      const actions = shortcutData.WFWorkflowActions || [];
-
-      document.getElementById('shortcutTitle').textContent = `Skrót: ${shortcutName} (${actions.length} akcji)`;
-      actionsBox.style.display = 'block';
-
-      renderActions(actions);
-      executeShortcut(actions);
-
-    } catch (err) {
-      outputEl.textContent = "Błąd podczas dekodowania: " + err.message;
-      console.error(err);
+      var raw = localStorage.getItem(STORE_KEY);
+      items = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(items)) items = [];
+    } catch (e) {
+      items = [];
     }
   }
 
-  function renderActions(actions) {
-    const list = document.getElementById('actionsList');
-    list.innerHTML = '';
+  function save() {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify(items));
+    } catch (e) {
+      banner($("statusBanner"), "err", "Nie udało się zapisać kafelków w pamięci przeglądarki.");
+    }
+  }
 
-    actions.forEach((act, i) => {
-      const card = document.createElement('div');
-      card.className = 'action-card';
-      const type = (act.WFWorkflowActionIdentifier || '').replace('is.workflow.actions.', '');
-      card.textContent = `${i + 1}. [${type}]`;
-      list.appendChild(card);
+  function newId() {
+    return "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  }
+
+  function find(id) {
+    for (var i = 0; i < items.length; i++) if (items[i].id === id) return items[i];
+    return null;
+  }
+
+  /* ---------- uruchamianie ---------- */
+
+  function callbackBase() {
+    return location.origin + location.pathname;
+  }
+
+  // shortcuts://x-callback-url/run-shortcut?name=…&input=text&text=…&x-success=…&x-error=…
+  function runUrl(name, input) {
+    var back = callbackBase();
+    var p = ["name=" + encodeURIComponent(name)];
+    if (input) {
+      p.push("input=text");
+      p.push("text=" + encodeURIComponent(input));
+    }
+    p.push("x-success=" + encodeURIComponent(back + "?done=" + encodeURIComponent(name)));
+    p.push("x-error=" + encodeURIComponent(back + "?failed=" + encodeURIComponent(name)));
+    return "shortcuts://x-callback-url/run-shortcut?" + p.join("&");
+  }
+
+  function go(url) {
+    // Przypisanie do location.href jest jedyną formą, którą Safari traktuje
+    // jak nawigację użytkownika do schematu aplikacji.
+    window.location.href = url;
+  }
+
+  function run(name, input) {
+    name = (name || "").trim();
+    if (!name) {
+      banner($("statusBanner"), "err", "Podaj nazwę skrótu.");
+      return;
+    }
+    if (!isApple) {
+      banner($("statusBanner"), "warn",
+        "To urządzenie nie obsługuje schematu <code>shortcuts://</code>. Otwórz tę stronę na iPhonie, iPadzie lub Macu.");
+      return;
+    }
+    banner($("statusBanner"), "ok",
+      "Przekazuję „" + escapeHtml(name) + "” do aplikacji Skróty…");
+    go(runUrl(name, input));
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
 
-  // 4. Silnik wykonujący wyciągnięte akcje bezpośrednio w przeglądarce
-  async function executeShortcut(actions) {
-    const outputEl = document.getElementById('outputText');
-    let currentVariable = document.getElementById('userInput').value;
+  /* ---------- kafelki ---------- */
 
-    outputEl.textContent = "== Uruchamianie skrótu na stronie ==\n";
+  function render() {
+    var box = $("tiles");
+    box.innerHTML = "";
+    $("tilesEmpty").style.display = items.length ? "none" : "block";
 
-    for (let i = 0; i < actions.length; i++) {
-      const act = actions[i];
-      const id = act.WFWorkflowActionIdentifier || '';
-      const params = act.WFWorkflowActionParameters || {};
+    items.forEach(function (it) {
+      var tile = document.createElement("div");
+      tile.className = "tile";
+      tile.style.setProperty("--accent", it.color || "#0a84ff");
+      tile.innerHTML =
+        '<div class="icon">' + escapeHtml(it.icon || "⚡") + "</div>" +
+        '<div class="name">' + escapeHtml(it.name) + "</div>" +
+        '<div class="meta">' + (it.ask ? "pyta o wejście" : (it.input ? escapeHtml(it.input) : "bez wejścia")) + "</div>" +
+        '<button class="edit" title="Edytuj">✎</button>';
 
-      outputEl.textContent += `\n[Krok ${i + 1}: ${id.split('.').pop()}]`;
+      tile.addEventListener("click", function (ev) {
+        if (ev.target.closest(".edit")) {
+          openDialog(it.id);
+          return;
+        }
+        var input = it.input || "";
+        if (it.ask) {
+          var answer = window.prompt("Dane wejściowe dla „" + it.name + "”:", input);
+          if (answer === null) return;
+          input = answer;
+        }
+        run(it.name, input);
+      });
 
-      // Akcja: Tekst
-      if (id.includes('text')) {
-        currentVariable = params.WFTextActionText || currentVariable;
-        outputEl.textContent += ` -> Zmienna: "${currentVariable}"`;
+      box.appendChild(tile);
+    });
+
+    renderShareSelect();
+  }
+
+  function renderShareSelect() {
+    var sel = $("shareSelect");
+    var prev = sel.value;
+    sel.innerHTML = "";
+    if (!items.length) {
+      var o = document.createElement("option");
+      o.textContent = "— brak zapisanych skrótów —";
+      o.value = "";
+      sel.appendChild(o);
+    } else {
+      items.forEach(function (it) {
+        var opt = document.createElement("option");
+        opt.value = it.id;
+        opt.textContent = (it.icon || "⚡") + "  " + it.name;
+        sel.appendChild(opt);
+      });
+      if (prev && find(prev)) sel.value = prev;
+    }
+    renderShareLink();
+  }
+
+  function shareLink(it) {
+    var url = callbackBase() + "?run=" + encodeURIComponent(it.name);
+    if (it.input) url += "&input=" + encodeURIComponent(it.input);
+    return url;
+  }
+
+  function renderShareLink() {
+    var it = find($("shareSelect").value);
+    $("shareOut").textContent = it ? shareLink(it) : "";
+  }
+
+  /* ---------- dialog edycji ---------- */
+
+  var dialog = $("editDialog");
+  var editingId = null;
+
+  function openDialog(id) {
+    editingId = id || null;
+    var it = id ? find(id) : null;
+    $("fName").value = it ? it.name : "";
+    $("fIcon").value = it ? (it.icon || "") : "⚡";
+    $("fInput").value = it ? (it.input || "") : "";
+    $("fColor").value = it ? (it.color || "#0a84ff") : "#0a84ff";
+    $("fAsk").checked = it ? !!it.ask : false;
+    $("fDelete").style.display = it ? "" : "none";
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+  }
+
+  function closeDialog() {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
+  $("editForm").addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    var name = $("fName").value.trim();
+    if (!name) return;
+    var data = {
+      name: name,
+      icon: $("fIcon").value.trim() || "⚡",
+      input: $("fInput").value,
+      color: $("fColor").value,
+      ask: $("fAsk").checked
+    };
+    var existing = editingId ? find(editingId) : null;
+    if (existing) {
+      Object.keys(data).forEach(function (k) { existing[k] = data[k]; });
+    } else {
+      data.id = newId();
+      items.push(data);
+    }
+    save();
+    render();
+    closeDialog();
+  });
+
+  $("fCancel").addEventListener("click", closeDialog);
+
+  $("fDelete").addEventListener("click", function () {
+    if (!editingId) return;
+    var it = find(editingId);
+    if (!it || !window.confirm("Usunąć kafelek „" + it.name + "”?")) return;
+    items = items.filter(function (x) { return x.id !== editingId; });
+    save();
+    render();
+    closeDialog();
+  });
+
+  /* ---------- zdarzenia ---------- */
+
+  $("quickRun").addEventListener("click", function () {
+    run($("quickName").value, $("quickInput").value);
+  });
+
+  $("quickSave").addEventListener("click", function () {
+    var name = $("quickName").value.trim();
+    if (!name) {
+      banner($("statusBanner"), "err", "Podaj nazwę skrótu, zanim zapiszesz kafelek.");
+      return;
+    }
+    items.push({
+      id: newId(),
+      name: name,
+      icon: "⚡",
+      input: $("quickInput").value,
+      color: "#0a84ff",
+      ask: false
+    });
+    save();
+    render();
+    $("quickName").value = "";
+    $("quickInput").value = "";
+    banner($("statusBanner"), "ok", "Dodano kafelek „" + escapeHtml(name) + "”.");
+  });
+
+  $("addBtn").addEventListener("click", function () { openDialog(null); });
+
+  $("exportBtn").addEventListener("click", function () {
+    var blob = new Blob([JSON.stringify(items, null, 2)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "shortrun-kafelki.json";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  });
+
+  $("importBtn").addEventListener("click", function () {
+    var picker = document.createElement("input");
+    picker.type = "file";
+    picker.accept = "application/json,.json";
+    picker.addEventListener("change", function () {
+      var file = picker.files && picker.files[0];
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var parsed = JSON.parse(String(reader.result));
+          if (!Array.isArray(parsed)) throw new Error("zły format");
+          parsed.forEach(function (raw) {
+            if (!raw || typeof raw.name !== "string" || !raw.name.trim()) return;
+            items.push({
+              id: newId(),
+              name: raw.name.trim(),
+              icon: typeof raw.icon === "string" ? raw.icon.slice(0, 4) : "⚡",
+              input: typeof raw.input === "string" ? raw.input : "",
+              color: typeof raw.color === "string" ? raw.color : "#0a84ff",
+              ask: !!raw.ask
+            });
+          });
+          save();
+          render();
+          banner($("statusBanner"), "ok", "Zaimportowano kafelki.");
+        } catch (e) {
+          banner($("statusBanner"), "err", "Nie udało się wczytać pliku — oczekiwano listy JSON z eksportu.");
+        }
+      };
+      reader.readAsText(file);
+    });
+    picker.click();
+  });
+
+  $("shareSelect").addEventListener("change", renderShareLink);
+
+  $("shareCopy").addEventListener("click", function () {
+    var it = find($("shareSelect").value);
+    if (!it) return;
+    var url = shareLink(it);
+    var done = function () { banner($("statusBanner"), "ok", "Skopiowano link do schowka."); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(done, function () {
+        banner($("statusBanner"), "warn", "Skopiuj link ręcznie: " + escapeHtml(url));
+      });
+    } else {
+      banner($("statusBanner"), "warn", "Skopiuj link ręcznie: " + escapeHtml(url));
+    }
+  });
+
+  $("shareOpen").addEventListener("click", function () {
+    var it = find($("shareSelect").value);
+    if (it) run(it.name, it.input);
+  });
+
+  function icloudValue() {
+    var raw = $("icloudUrl").value.trim();
+    if (!raw) {
+      banner($("statusBanner"), "err", "Wklej link iCloud do skrótu.");
+      return null;
+    }
+    var parsed;
+    try {
+      parsed = new URL(raw);
+    } catch (e) {
+      banner($("statusBanner"), "err", "To nie wygląda na poprawny adres URL.");
+      return null;
+    }
+    if (!/(^|\.)icloud\.com$/.test(parsed.hostname) || parsed.pathname.indexOf("/shortcuts/") !== 0) {
+      banner($("statusBanner"), "err", "Oczekiwano linku w formacie <code>https://www.icloud.com/shortcuts/…</code>.");
+      return null;
+    }
+    return parsed.href;
+  }
+
+  $("icloudInstall").addEventListener("click", function () {
+    var url = icloudValue();
+    if (!url) return;
+    if (!isApple) {
+      banner($("statusBanner"), "warn", "Dodawanie skrótów działa tylko na urządzeniach Apple.");
+      return;
+    }
+    go("shortcuts://import-shortcut?url=" + encodeURIComponent(url));
+  });
+
+  $("icloudOpen").addEventListener("click", function () {
+    var url = icloudValue();
+    if (url) window.open(url, "_blank", "noopener");
+  });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".chip[data-scheme]"), function (chip) {
+    chip.addEventListener("click", function () {
+      if (!isApple) {
+        banner($("statusBanner"), "warn", "Aplikacja Skróty jest dostępna tylko na urządzeniach Apple.");
+        return;
       }
-      // Akcja: Podział tekstu
-      else if (id.includes('splittext')) {
-        const sep = params.WFTextSeparator || " ";
-        currentVariable = currentVariable.split(sep);
-        outputEl.textContent += ` -> Podzielono na tablicę: [${currentVariable.join(', ')}]`;
-      }
-      // Akcja: Otwórz URL
-      else if (id.includes('openurl')) {
-        const target = params.WFURL || currentVariable;
-        outputEl.textContent += ` -> Otwieranie karty: ${target}`;
-        window.open(target, '_blank');
-      }
-      // Inne akcje
-      else {
-        outputEl.textContent += ` -> Przetworzono akcję.`;
-      }
+      go(chip.dataset.scheme);
+    });
+  });
+
+  /* ---------- parametry adresu (link współdzielony + powrót z x-callback) ---------- */
+
+  function handleParams() {
+    var q = new URLSearchParams(location.search);
+    var done = q.get("done");
+    var failed = q.get("failed");
+    var toRun = q.get("run");
+
+    if (done) {
+      banner($("statusBanner"), "ok", "Skrót „" + escapeHtml(done) + "” zakończył się pomyślnie.");
+    } else if (failed) {
+      banner($("statusBanner"), "err",
+        "Skrót „" + escapeHtml(failed) + "” nie zadziałał. Sprawdź, czy nazwa zgadza się co do znaku " +
+        "i czy w Ustawieniach → Skróty włączone jest „Zezwalaj na uruchamianie skryptów”.");
     }
 
-    outputEl.textContent += `\n\n=== KOŃCOWE WYJŚCIE (OUTPUT) ===\n`;
-    outputEl.textContent += typeof currentVariable === 'object' ? JSON.stringify(currentVariable, null, 2) : currentVariable;
-  }
-</script>
+    if (done || failed) {
+      history.replaceState(null, "", callbackBase());
+    }
 
+    if (toRun) {
+      $("quickName").value = toRun;
+      var input = q.get("input") || "";
+      $("quickInput").value = input;
+      history.replaceState(null, "", callbackBase());
+      run(toRun, input);
+    }
+  }
+
+  load();
+  render();
+  handleParams();
+})();
+</script>
 </body>
 </html>
