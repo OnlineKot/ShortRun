@@ -70,6 +70,19 @@ button.ghost { background: transparent; color: var(--blue); }
 .pill { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--card-2); border: 1px solid var(--line); color: var(--muted); }
 .pill.good { color: #a8f0bd; border-color: rgba(48,209,88,0.4); }
 .pill.warn { color: #ffd79a; border-color: rgba(255,159,10,0.4); }
+.pill.emul { color: #e2b6ff; border-color: rgba(191,90,242,0.45); }
+
+.brand { margin: 2px 0 0; font-size: 13px; letter-spacing: 0.3px; }
+.brand a { color: var(--purple); text-decoration: none; font-weight: 600; }
+.brand a:hover { text-decoration: underline; }
+footer a { color: var(--purple); text-decoration: none; }
+
+.dev-group { border: 1px solid var(--line); border-radius: 12px; padding: 11px 13px; margin-bottom: 8px; background: var(--card-2); }
+.dev-group h3 { margin: 0 0 6px; font-size: 13px; color: var(--purple); text-transform: uppercase; letter-spacing: 0.6px; }
+.dev-group table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dev-group td { padding: 3px 0; vertical-align: top; word-break: break-word; }
+.dev-group td:first-child { color: var(--muted); width: 45%; padding-right: 10px; }
+.dev-empty { color: var(--muted); font-size: 13px; }
 
 .steps { list-style: none; margin: 0; padding: 0; counter-reset: step; }
 .steps li {
@@ -79,8 +92,8 @@ button.ghost { background: transparent; color: var(--blue); }
 .steps li[data-depth="1"] { padding-left: 26px; }
 .steps li[data-depth="2"] { padding-left: 40px; }
 .steps li .idx { color: var(--muted); font-size: 11px; min-width: 20px; }
-.steps li.unsupported { color: var(--muted); }
-.steps li.unsupported .name { text-decoration: line-through; }
+.steps li.emulated .name { color: #e2b6ff; }
+.steps li.emulated .name::after { content: " ⟡"; }
 .steps li.flow { color: var(--purple); font-weight: 600; }
 
 .log { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto; }
@@ -91,6 +104,8 @@ button.ghost { background: transparent; color: var(--blue); }
 .entry.run { border-left-color: var(--blue); }
 .entry.ok { border-left-color: var(--green); }
 .entry.skip { border-left-color: var(--orange); }
+.entry.emul { border-left-color: var(--purple); }
+.entry.emul .t::after { content: " ⟡"; color: var(--purple); }
 .entry.error { border-left-color: var(--red); }
 .entry .t { font-weight: 600; }
 .entry .d { color: var(--muted); white-space: pre-wrap; word-break: break-word; margin-top: 3px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }

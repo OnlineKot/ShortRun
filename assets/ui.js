@@ -280,9 +280,9 @@
 
       var li = document.createElement("li");
       li.dataset.depth = String(Math.min(2, depth));
-      var supported = SR.actions.has(id) || isFlow;
-      if (!supported) missing.push(id);
-      li.className = supported ? (isFlow ? "flow" : "") : "unsupported";
+      var native = SR.actions.has(id) || isFlow;
+      if (!native) missing.push(id);
+      li.className = native ? (isFlow ? "flow" : "") : "emulated";
       li.innerHTML = '<span class="idx">' + (index + 1) + "</span>" +
                      '<span class="name">' + escapeHtml(SR.actions.label(id)) +
                      (isFlow ? " " + (flow === 0 ? "▸ początek" : flow === 1 ? "▸ inaczej" : "▸ koniec") : "") +
@@ -297,11 +297,70 @@
       '<span class="pill">' + escapeHtml(meta.name || "Skrót bez nazwy") + "</span>" +
       '<span class="pill">' + actions.length + " akcji</span>" +
       (unique.length
-        ? '<span class="pill warn">' + unique.length + " nieobsługiwanych</span>"
-        : '<span class="pill good">wszystkie akcje obsługiwane</span>');
+        ? '<span class="pill emul">' + unique.length + " emulowanych</span>"
+        : '<span class="pill good">wszystkie akcje natywne</span>');
 
     $("infoCard").hidden = false;
     if (meta.name) $("deviceName").value = meta.name;
+  }
+
+  /* ---------- panel wirtualnego urządzenia ---------- */
+
+  function group(title, rows) {
+    if (!rows.length) return "";
+    return '<div class="dev-group"><h3>' + escapeHtml(title) + "</h3><table><tbody>" +
+      rows.map(function (row) {
+        return "<tr><td>" + escapeHtml(row[0]) + "</td><td>" + escapeHtml(row[1]) + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+  }
+
+  function renderDevice(device) {
+    if (!device) return;
+    var html = "";
+
+    html += group("Urządzenie", [
+      ["model", device.model],
+      ["system", device.system],
+      ["bateria", device.battery + "%"]
+    ]);
+
+    html += group("Zdrowie", device.health.map(function (entry) {
+      return [entry.typ, entry.wartość + (entry.jednostka ? " " + entry.jednostka : "")];
+    }).concat(device.workouts.map(function (workout) {
+      return ["trening: " + workout.typ, workout["czas trwania"] + " min, " + workout.kcal + " kcal"];
+    })));
+
+    html += group("Dom", Object.keys(device.home).map(function (name) {
+      var accessory = device.home[name];
+      return [name, accessory.stan + (accessory.temperatura ? ", " + accessory.temperatura + "°C" : "")];
+    }));
+
+    html += group("Ustawienia", Object.keys(device.settings).map(function (name) {
+      var value = device.settings[name];
+      if (typeof value === "boolean") return [name, value ? "włączone" : "wyłączone"];
+      if (typeof value === "number") return [name, Math.round(value * 100) + "%"];
+      return [name, String(value)];
+    }));
+
+    html += group("Media", [[device.media.odtwarzanie ? "odtwarza" : "zatrzymane", device.media.utwór]]);
+
+    html += group("Wysłane", device.messages.map(function (m) { return ["wiadomość do " + m.do, m.treść]; })
+      .concat(device.mails.map(function (m) { return ["e-mail do " + m.do, m.temat]; })));
+
+    html += group("Kalendarz i listy", device.events.map(function (e) { return ["wydarzenie", e.tytuł]; })
+      .concat(device.reminders.map(function (r) { return ["przypomnienie", r.tytuł]; }))
+      .concat(device.notes.map(function (n) { return ["notatka", n.treść]; })));
+
+    html += group("Pliki", Object.keys(device.files).map(function (path) {
+      return [path, val.toText(device.files[path]).slice(0, 60)];
+    }));
+
+    html += group("Zdjęcia", device.photos.slice(-4).map(function (photo) { return [photo.nazwa, photo.data]; }));
+
+    html += group("Dziennik emulacji", device.log.map(function (entry) { return [entry.kind, entry.text]; }));
+
+    $("device").innerHTML = html || '<p class="dev-empty">Skrót nie dotknął żadnej funkcji systemowej.</p>';
+    $("deviceCard").hidden = false;
   }
 
   /* ---------- wykonanie ---------- */
@@ -314,6 +373,8 @@
     $("log").innerHTML = "";
     $("logCard").hidden = false;
     $("outCard").hidden = true;
+    $("deviceCard").hidden = true;
+    SR.emulation.reset();
 
     var started = Date.now();
     SR.engine.run(state.shortcut, ui, { input: $("input").value }).then(function (result) {
@@ -321,13 +382,15 @@
       $("out").textContent = text === "" ? "(skrót nie zwrócił wartości)" : text;
       $("outCard").hidden = false;
       var seconds = ((Date.now() - started) / 1000).toFixed(1);
-      if (result.unsupported.length) {
-        var unique = result.unsupported.filter(function (id, i) { return result.unsupported.indexOf(id) === i; });
-        banner("warn", "Skrót wykonany w " + seconds + " s, ale " + unique.length +
-          " akcji pominięto (wymagają systemu Apple): <code>" +
-          unique.map(function (id) { return escapeHtml(SR.actions.label(id)); }).join("</code>, <code>") + "</code>.");
+      renderDevice(result.device);
+      var emulated = result.emulated.filter(function (id, i) { return result.emulated.indexOf(id) === i; });
+      if (emulated.length) {
+        banner("info", "Skrót wykonany w " + seconds + " s. " + emulated.length +
+          " akcji systemowych odegrano na wirtualnym urządzeniu: <code>" +
+          emulated.map(function (id) { return escapeHtml(SR.actions.label(id)); }).join("</code>, <code>") +
+          "</code>. Stan urządzenia widać w panelu niżej.");
       } else {
-        banner("ok", "Skrót wykonany w " + seconds + " s.");
+        banner("ok", "Skrót wykonany w " + seconds + " s, wszystkie akcje natywnie.");
       }
     }, function (err) {
       logEntry({ status: "error", title: "Przerwano", detail: err && err.message ? err.message : String(err) });

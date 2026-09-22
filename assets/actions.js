@@ -566,11 +566,18 @@
   };
 
   root.actions = {
-    get: function (id) { return MAP[id]; },
+    /* Najpierw natywna implementacja, a gdy jej nie ma, emulator urządzenia. */
+    get: function (id) {
+      if (MAP[id]) return MAP[id];
+      return root.emulation ? root.emulation.resolve(id) : null;
+    },
+    define: function (id, spec) { MAP[id] = spec; },
     has: function (id) { return !!MAP[id]; },
     label: function (id) {
       if (MAP[id] && MAP[id].label) return MAP[id].label;
       if (LABELS[id]) return LABELS[id];
+      var emulated = root.emulation ? root.emulation.resolve(id) : null;
+      if (emulated && emulated.label) return emulated.label;
       return String(id).replace(/^is\.workflow\.actions\./, "");
     },
     count: function () { return Object.keys(MAP).length; },

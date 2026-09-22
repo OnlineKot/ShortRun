@@ -74,6 +74,7 @@
     this.output = null;
     this.stopped = false;
     this.unsupported = [];
+    this.emulated = [];
   }
 
   Context.prototype.setVar = function (name, value) {
@@ -343,7 +344,9 @@
       return {
         output: ctx.output !== null && ctx.output !== undefined ? ctx.output : ctx.last,
         unsupported: ctx.unsupported,
-        vars: ctx.vars
+        emulated: ctx.emulated,
+        vars: ctx.vars,
+        device: root.emulation ? root.emulation.device() : null
       };
     }
   }
@@ -371,20 +374,30 @@
 
     if (!impl) {
       ctx.unsupported.push(id);
-      ctx.ui.log({ status: "skip", title: label, detail: "Akcja nieobsługiwana w symulatorze — pomijam, wejście przechodzi dalej." });
+      ctx.ui.log({ status: "skip", title: label, detail: "Brak implementacji i emulatora, krok pominięty." });
       return Promise.resolve();
     }
 
+    var emulated = !!impl.emulated;
+    if (emulated) {
+      ctx.emulated.push(id);
+      label = impl.label + " (emulacja)";
+    }
+
     return resolveParam(node.params, ctx).then(function (params) {
-      ctx.ui.log({ status: "run", title: label, detail: impl.describe ? impl.describe(params, ctx) : "" });
+      // Krok emulowany opisujemy dopiero wynikiem, żeby nie dublować wpisów.
+      if (!emulated) {
+        ctx.ui.log({ status: "run", title: label, detail: impl.describe ? impl.describe(params, ctx) : "" });
+      }
       return impl.run(params, ctx, node);
     }).then(function (result) {
+      var status = emulated ? "emul" : "ok";
       if (result !== undefined) {
         ctx.last = result;
         if (node.params && node.params.UUID) ctx.outputs[node.params.UUID] = result;
-        ctx.ui.log({ status: "ok", title: label, detail: preview(result) });
+        ctx.ui.log({ status: status, title: label, detail: preview(result) });
       } else {
-        ctx.ui.log({ status: "ok", title: label, detail: "" });
+        ctx.ui.log({ status: status, title: label, detail: "" });
       }
     }, function (err) {
       if (err && err.__stop) throw err;

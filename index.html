@@ -6,8 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0b0b0d">
-<meta name="description" content="ShortRun — uruchamiaj skróty Apple bezpośrednio w przeglądarce.">
-<title>ShortRun — silnik Skrótów w przeglądarce</title>
+<meta name="description" content="ShortRun od TeodorTeo.com: uruchamiaj skróty Apple w przeglądarce, z emulacją akcji systemowych.">
+<meta name="author" content="TeodorTeo.com">
+<title>ShortRun · TeodorTeo.com</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%235e5ce6'/%3E%3Ctext x='50' y='70' font-size='58' text-anchor='middle'%3E%E2%9A%A1%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="assets/app.css">
 </head>
@@ -16,9 +17,12 @@
 
   <header>
     <div class="logo">⚡</div>
-    <h1>ShortRun</h1>
+    <div>
+      <h1>ShortRun</h1>
+      <p class="brand"><a href="https://TeodorTeo.com" target="_blank" rel="noopener">TeodorTeo.com</a></p>
+    </div>
   </header>
-  <p class="tagline">Wklej link iCloud do skrótu — silnik rozłoży go na akcje i wykona je tutaj, w przeglądarce.</p>
+  <p class="tagline">Wklej link iCloud do skrótu. Silnik rozłoży go na akcje i wykona je tutaj, w przeglądarce, a akcje systemowe odegra na wirtualnym urządzeniu.</p>
 
   <div id="banner"></div>
 
@@ -55,6 +59,12 @@
     <div class="log" id="log"></div>
   </div>
 
+  <div class="card" id="deviceCard" hidden>
+    <h2>Wirtualne urządzenie</h2>
+    <p class="hint">Stan po ostatnim uruchomieniu. Tutaj trafiają akcje, których przeglądarka nie wykona naprawdę: Zdrowie, Dom, wiadomości, pliki, ustawienia.</p>
+    <div id="device"></div>
+  </div>
+
   <div class="card" id="outCard" hidden>
     <h2>Wynik</h2>
     <div class="output"><pre id="out"></pre></div>
@@ -65,7 +75,7 @@
 
   <div class="card">
     <h2>Uruchom na urządzeniu Apple</h2>
-    <p class="hint">Akcji systemowych (Dom, Zdrowie, pliki, automatyzacje) przeglądarka nie wykona. Tę część skrótu oddaj aplikacji Skróty — potrzebna jest dokładna nazwa skrótu z urządzenia.</p>
+    <p class="hint">Emulacja pokazuje, co skrót zrobiłby z Twoim urządzeniem, ale niczego na nim nie zmienia. Gdy chcesz efektu naprawdę, oddaj skrót aplikacji Skróty. Potrzebna jest dokładna nazwa skrótu z urządzenia.</p>
     <label for="deviceName">Nazwa skrótu</label>
     <input id="deviceName" type="text" placeholder="np. Tryb nocny" autocomplete="off">
     <div class="row">
@@ -81,8 +91,8 @@
       <div class="body">
         <p>Plik skrótu to lista akcji zapisana w plist. ShortRun czyta rekord <code>icloud.com/shortcuts/api/records/&lt;id&gt;</code>, pobiera z niego plik skrótu, parsuje binarny plist w przeglądarce i wykonuje akcje własnym interpreterem: ze zmiennymi, zmiennymi magicznymi, warunkami, pętlami i menu.</p>
         <ul>
-          <li><strong>Działa:</strong> tekst, liczby, wyrażenia, słowniki i listy, JSON, zapytania HTTP, schowek, pytania i menu, powiadomienia, mowa, lokalizacja, bateria, daty.</li>
-          <li><strong>Nie zadziała:</strong> akcje sięgające do systemu Apple — Zdrowie, Dom, Zdjęcia, pliki iCloud, ustawienia urządzenia, automatyzacje. Takie kroki są pomijane i oznaczane w przebiegu.</li>
+          <li><strong>Wykonywane naprawdę:</strong> tekst, liczby, wyrażenia, słowniki i listy, JSON, zapytania HTTP, schowek, pytania i menu, powiadomienia, mowa, lokalizacja, bateria, daty.</li>
+          <li><strong>Emulowane:</strong> Zdrowie, Dom, wiadomości i poczta, kalendarz, przypomnienia, notatki, zdjęcia i aparat, pliki, muzyka, Wi-Fi, Bluetooth, jasność, głośność, tryby skupienia, pogoda, mapy, kontakty. Wirtualne urządzenie zmienia stan, zwraca wiarygodne dane i pokazuje to w panelu. Nieznana akcja też jest emulowana, a nie pomijana.</li>
           <li><strong>Podpisane skróty (AEA):</strong> rekord iCloud zawiera dwa pliki, zwykły plist i wersję podpisaną. ShortRun bierze najpierw ten zwykły, a gdy trafi na archiwum AEA, próbuje drugiego pliku i dopiero potem mówi wprost, że przeglądarka go nie rozpakuje.</li>
           <li><strong>CORS:</strong> iCloud i część API nie zezwalają na zapytania z innych domen. W Ustawieniach można podać własne proxy z szablonem <code>{url}</code>.</li>
         </ul>
@@ -90,7 +100,10 @@
     </details>
   </div>
 
-  <footer>Wszystko dzieje się lokalnie w Twojej przeglądarce. Nic nie trafia na nasz serwer — poza zapytaniami, które wykonuje sam skrót.</footer>
+  <footer>
+    Wszystko dzieje się lokalnie w Twojej przeglądarce. Poza zapytaniami, które wykonuje sam skrót, nic nie opuszcza tego urządzenia.<br>
+    <a href="https://TeodorTeo.com" target="_blank" rel="noopener">TeodorTeo.com</a>
+  </footer>
 </div>
 
 <dialog id="askDialog">
@@ -148,6 +161,7 @@
 <script src="assets/plist.js"></script>
 <script src="assets/engine.js"></script>
 <script src="assets/actions.js"></script>
+<script src="assets/emulation.js"></script>
 <script src="assets/loader.js"></script>
 <script src="assets/ui.js"></script>
 </body>
